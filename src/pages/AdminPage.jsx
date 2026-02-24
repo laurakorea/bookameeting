@@ -1,0 +1,415 @@
+import React, { useState, useEffect } from 'react';
+import { supabase } from '../supabaseClient';
+import { CheckCircle, XCircle, Clock, Mail, Plus, X, Users, User } from 'lucide-react';
+
+const AdminPage = () => {
+    const [activeTab, setActiveTab] = useState('bookings'); // 'bookings', 'companies', 'users'
+    const [bookings, setBookings] = useState([]);
+    const [companies, setCompanies] = useState([]);
+    const [users, setUsers] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [loadingCompanies, setLoadingCompanies] = useState(false);
+    const [newCompanyName, setNewCompanyName] = useState('');
+    const [isCompanyModalOpen, setIsCompanyModalOpen] = useState(false);
+    const [selectedCompanyMembers, setSelectedCompanyMembers] = useState(null); // { name: string, members: array }
+    const [isMemberModalOpen, setIsMemberModalOpen] = useState(false);
+
+    useEffect(() => {
+        if (activeTab === 'bookings') fetchPendingBookings();
+        if (activeTab === 'companies') fetchCompanies();
+        if (activeTab === 'users') fetchUsers();
+    }, [activeTab]);
+
+    const generateCompanyId = () => {
+        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+        let result = '';
+        for (let i = 0; i < 8; i++) {
+            result += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        return result;
+    };
+
+    const fetchCompanies = async () => {
+        console.log('fetchCompanies called. Supabase client exists:', !!supabase);
+        if (!supabase) return;
+
+        setLoadingCompanies(true);
+        const { data: companiesData, error: companiesError } = await supabase.from('companies').select('*').order('created_at', { ascending: false });
+        const { data: profilesData, error: profilesError } = await supabase.from('profiles').select('*');
+
+        if (companiesError || profilesError) {
+            console.error('Fetch Companies/Profiles Error:', companiesError || profilesError);
+            alert('정보를 불러오는 중 오류가 발생했습니다.');
+            setLoadingCompanies(false);
+            return;
+        }
+
+        if (companiesData) {
+            const processedCompanies = companiesData.map(c => ({
+                ...c,
+                memberCount: profilesData ? profilesData.filter(p => p.company_id === c.id).length : 0,
+                members: profilesData ? profilesData.filter(p => p.company_id === c.id) : []
+            }));
+            setCompanies(processedCompanies);
+        }
+        setLoadingCompanies(false);
+    };
+
+    const fetchUsers = async () => {
+        if (!supabase) return;
+        const { data, error } = await supabase
+            .from('profiles')
+            .select('*, companies(name)')
+            .order('name');
+
+        if (error) {
+            console.error('Fetch Users Error:', error);
+            alert('사용자 정보를 불러오는 중 오류가 발생했습니다: ' + error.message);
+            return;
+        }
+        if (data) setUsers(data.map(u => ({ ...u, company_name: `${u.companies?.name} (${u.company_id})` })));
+    };
+
+    const handleCreateCompany = async () => {
+        if (!newCompanyName) return;
+
+        if (!supabase) {
+            alert('Supabase 연결 설정(.env)이 완료되지 않았습니다. 가이드를 확인해 주세요.');
+            return;
+        }
+
+        const newId = generateCompanyId();
+        const { error } = await supabase.from('companies').insert([{ id: newId, name: newCompanyName }]);
+
+        if (error) {
+            console.error(error);
+            alert('회사 생성 중 오류가 발생했습니다: ' + error.message);
+            return;
+        }
+
+        alert(`회사 '${newCompanyName}'가 생성되었습니다. ID: ${newId}`);
+        fetchCompanies();
+        setNewCompanyName('');
+        setIsCompanyModalOpen(false);
+    };
+
+    const fetchPendingBookings = async () => {
+        if (!supabase) {
+            setLoading(false);
+            return;
+        }
+        setLoading(true);
+        const { data, error } = await supabase
+            .from('bookings')
+            .select('*, companies(name)')
+            .order('created_at', { ascending: false });
+
+        if (error) {
+            console.error('Fetch Bookings Error:', error);
+            alert('예약 정보를 불러오는 중 오류가 발생했습니다: ' + error.message);
+        } else if (data) {
+            setBookings(data);
+        }
+        setLoading(false);
+    };
+
+    const handleApprove = async (id, userId, companyId) => {
+        setBookings(prev => prev.map(b => b.id === id ? { ...b, status: 'approved' } : b));
+        await supabase.from('bookings').update({ status: 'approved' }).eq('id', id);
+        alert(`${companyId}의 ${userId}님 예약을 승인했습니다.`);
+    };
+
+    return (
+        <div className="p-8 max-w-6xl mx-auto">
+            <header className="mb-10 flex justify-between items-end">
+                <div>
+                    <h1 className="text-3xl font-bold text-gray-800">관리자 대시보드</h1>
+                    <p className="text-gray-500">시스템 통합 관리 및 승인</p>
+                </div>
+                <div className="flex bg-gray-100 p-1 rounded-xl">
+                    <button
+                        onClick={() => setActiveTab('bookings')}
+                        className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'bookings' ? 'bg-white text-mint-500 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                    >
+                        예약 관리
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('companies')}
+                        className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'companies' ? 'bg-white text-mint-500 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                    >
+                        회사 관리
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('users')}
+                        className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'users' ? 'bg-white text-mint-500 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                    >
+                        사용자 관리
+                    </button>
+                </div>
+            </header>
+
+            {activeTab === 'bookings' && (
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                    <table className="w-full text-left border-collapse">
+                        <thead>
+                            <tr className="bg-gray-50 border-b border-gray-100">
+                                <th className="px-6 py-4 text-sm font-semibold text-gray-600">신청일</th>
+                                <th className="px-6 py-4 text-sm font-semibold text-gray-600">입주사 / 신청자</th>
+                                <th className="px-6 py-4 text-sm font-semibold text-gray-600">회의실 / 인원</th>
+                                <th className="px-6 py-4 text-sm font-semibold text-gray-600">신청 사유</th>
+                                <th className="px-6 py-4 text-sm font-semibold text-gray-600">예약 일시</th>
+                                <th className="px-6 py-4 text-sm font-semibold text-gray-600 text-right">관리</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-50">
+                            {bookings.map((booking) => (
+                                <tr key={booking.id} className="hover:bg-gray-50/50 transition-colors">
+                                    <td className="px-6 py-4 text-xs text-gray-500 font-medium">{new Date(booking.created_at).toLocaleDateString()}</td>
+                                    <td className="px-6 py-4">
+                                        <div className="font-semibold text-gray-800">{booking.companies?.name || booking.company_id}</div>
+                                        <div className="text-xs text-gray-400">{booking.user_id}</div>
+                                    </td>
+                                    <td className="px-6 py-4">
+                                        <div className="font-semibold text-gray-800">{booking.room_name}</div>
+                                        <div className="text-[10px] text-gray-400 font-medium">참석 {booking.attendees_count || '-'}명</div>
+                                    </td>
+                                    <td className="px-6 py-4 text-sm text-gray-700">{booking.booking_reason || '-'}</td>
+                                    <td className="px-6 py-4 text-sm text-gray-600">
+                                        <div className="text-xs font-bold text-mint-500">{new Date(booking.start_time).toLocaleDateString()}</div>
+                                        <div className="flex items-center gap-1 text-gray-500">
+                                            <Clock className="w-3 h-3" />
+                                            {new Date(booking.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} ~ {new Date(booking.end_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                        </div>
+                                    </td>
+                                    <td className="px-6 py-4 text-right">
+                                        {booking.status === 'pending' ? (
+                                            <button onClick={() => handleApprove(booking.id, booking.user_id, booking.company_id)} className="px-3 py-1.5 bg-mint-400 text-white text-xs font-bold rounded-lg hover:bg-mint-500 transition-colors">승인</button>
+                                        ) : booking.status === 'approved' ? (
+                                            <span className="text-mint-500 font-bold text-xs uppercase italic bg-mint-50 px-2 py-1 rounded">Approved</span>
+                                        ) : (
+                                            <span className="text-gray-400 font-bold text-xs uppercase italic bg-gray-50 px-2 py-1 rounded">Cancelled</span>
+                                        )}
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            )}
+
+            {activeTab === 'companies' && (
+                <div className="space-y-6">
+                    <div className="flex justify-between items-center bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
+                        <div>
+                            <h2 className="text-lg font-bold text-gray-800">등록 회사 목록</h2>
+                            <p className="text-sm text-gray-500 font-medium">현재 시스템에 등록된 모든 회사 정보입니다.</p>
+                        </div>
+                        <button
+                            onClick={() => setIsCompanyModalOpen(true)}
+                            className="bg-mint-400 text-white px-6 py-3 rounded-xl font-bold text-sm hover:bg-mint-500 transition-all shadow-lg shadow-mint-100 flex items-center gap-2"
+                        >
+                            <Plus className="w-4 h-4" /> 추가하기
+                        </button>
+                    </div>
+                    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                        <table className="w-full text-left border-collapse">
+                            <thead>
+                                <tr className="bg-gray-50 border-b border-gray-100">
+                                    <th className="px-6 py-4 text-sm font-semibold text-gray-600">회사명</th>
+                                    <th className="px-6 py-4 text-sm font-semibold text-gray-600">회사 ID (8자리 코드)</th>
+                                    <th className="px-6 py-4 text-sm font-semibold text-gray-600 text-center">멤버 수</th>
+                                    <th className="px-6 py-4 text-sm font-semibold text-gray-600">생성일</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-50">
+                                {loadingCompanies ? (
+                                    <tr>
+                                        <td colSpan="4" className="px-6 py-10 text-center text-gray-400 italic">회사 정보를 불러오는 중입니다...</td>
+                                    </tr>
+                                ) : companies.length > 0 ? (
+                                    companies.map(c => (
+                                        <tr key={c.id}>
+                                            <td className="px-6 py-4 font-bold text-gray-800">{c.name}</td>
+                                            <td className="px-6 py-4"><code className="bg-mint-50 text-mint-600 px-2 py-1 rounded text-xs font-bold tracking-widest">{c.id}</code></td>
+                                            <td className="px-6 py-4 text-center">
+                                                <button
+                                                    onClick={() => {
+                                                        setSelectedCompanyMembers({ name: c.name, members: c.members });
+                                                        setIsMemberModalOpen(true);
+                                                    }}
+                                                    className="px-4 py-1.5 bg-gray-50 hover:bg-mint-50 text-gray-600 hover:text-mint-600 rounded-full text-sm font-bold transition-all border border-gray-100 flex items-center justify-center gap-2 mx-auto"
+                                                >
+                                                    <Users className="w-3.5 h-3.5" />
+                                                    {c.memberCount}명
+                                                </button>
+                                            </td>
+                                            <td className="px-6 py-4 text-sm text-gray-400">{new Date(c.created_at).toLocaleDateString()}</td>
+                                        </tr>
+                                    ))
+                                ) : (
+                                    <tr>
+                                        <td colSpan="4" className="px-6 py-10 text-center text-gray-400 italic">등록된 회사 정보가 없습니다.</td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
+
+            {activeTab === 'users' && (
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                    <table className="w-full text-left border-collapse">
+                        <thead>
+                            <tr className="bg-gray-50 border-b border-gray-100">
+                                <th className="px-6 py-4 text-sm font-semibold text-gray-600">이름</th>
+                                <th className="px-6 py-4 text-sm font-semibold text-gray-600">이메일 / 연락처</th>
+                                <th className="px-6 py-4 text-sm font-semibold text-gray-600">소속 회사 (ID)</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-50">
+                            {users.map((u, i) => (
+                                <tr key={i}>
+                                    <td className="px-6 py-4 font-bold text-gray-800">{u.name}</td>
+                                    <td className="px-6 py-4">
+                                        <div className="text-sm text-gray-700">{u.email}</div>
+                                        <div className="text-xs text-gray-400">{u.phone}</div>
+                                    </td>
+                                    <td className="px-6 py-4 text-sm text-gray-500">{u.company_name}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            )}
+            {/* 회사 추가 모달 */}
+            {isCompanyModalOpen && (
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200">
+                        <div className="p-8">
+                            <div className="flex justify-between items-center mb-6">
+                                <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                                    <Plus className="w-5 h-5 text-mint-400" />
+                                    신규 회사 등록
+                                </h3>
+                                <button
+                                    onClick={() => {
+                                        setIsCompanyModalOpen(false);
+                                        setNewCompanyName('');
+                                    }}
+                                    className="p-2 hover:bg-gray-100 rounded-full text-gray-400 transition-colors"
+                                >
+                                    <X className="w-5 h-5" />
+                                </button>
+                            </div>
+
+                            <div className="space-y-5">
+                                <div>
+                                    <label className="text-xs font-bold text-gray-400 uppercase mb-2 block px-1">회사 이름</label>
+                                    <input
+                                        type="text"
+                                        value={newCompanyName}
+                                        onChange={(e) => setNewCompanyName(e.target.value)}
+                                        placeholder="등록하실 회사명을 입력해주세요"
+                                        autoFocus
+                                        className="w-full bg-gray-50 border border-transparent focus:border-mint-400 focus:bg-white rounded-xl px-4 py-3 text-sm transition-all outline-none"
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter') handleCreateCompany();
+                                        }}
+                                    />
+                                    <p className="mt-2 text-[11px] text-gray-400 italic font-medium px-1">* 생성 후 부여되는 8자리 ID를 입주사에 전달해 주세요.</p>
+                                </div>
+                            </div>
+
+                            <div className="mt-10 flex gap-3">
+                                <button
+                                    onClick={() => {
+                                        setIsCompanyModalOpen(false);
+                                        setNewCompanyName('');
+                                    }}
+                                    className="flex-1 px-6 py-3 rounded-xl text-sm font-bold text-gray-500 hover:bg-gray-100 transition-colors"
+                                >
+                                    취소
+                                </button>
+                                <button
+                                    onClick={handleCreateCompany}
+                                    disabled={!newCompanyName.trim()}
+                                    className="flex-1 px-6 py-3 bg-mint-400 hover:bg-mint-500 disabled:bg-gray-200 text-white rounded-xl text-sm font-bold shadow-lg shadow-mint-100 transition-all active:scale-95"
+                                >
+                                    추가하기
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* 회사별 멤버 목록 모달 */}
+            {isMemberModalOpen && selectedCompanyMembers && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-50 flex items-center justify-center p-4">
+                    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in fade-in zoom-in duration-300">
+                        <div className="p-8">
+                            <div className="flex justify-between items-center mb-8">
+                                <div>
+                                    <h3 className="text-2xl font-bold text-gray-800 mb-1">{selectedCompanyMembers.name}</h3>
+                                    <p className="text-gray-400 text-sm font-medium">가입된 멤버 총 {selectedCompanyMembers.members.length}명</p>
+                                </div>
+                                <button
+                                    onClick={() => {
+                                        setIsMemberModalOpen(false);
+                                        setSelectedCompanyMembers(null);
+                                    }}
+                                    className="p-3 hover:bg-gray-100 rounded-2xl text-gray-400 transition-colors"
+                                >
+                                    <X className="w-6 h-6" />
+                                </button>
+                            </div>
+
+                            <div className="max-h-[50vh] overflow-y-auto pr-2 custom-scrollbar">
+                                {selectedCompanyMembers.members.length > 0 ? (
+                                    <div className="grid gap-3">
+                                        {selectedCompanyMembers.members.map((m, idx) => (
+                                            <div key={idx} className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border border-gray-100 hover:border-mint-200 hover:bg-white transition-all group">
+                                                <div className="flex items-center gap-4">
+                                                    <div className="w-10 h-10 bg-mint-100 text-mint-600 rounded-xl flex items-center justify-center font-bold">
+                                                        {m.name.charAt(0)}
+                                                    </div>
+                                                    <div>
+                                                        <div className="font-bold text-gray-800">{m.name}</div>
+                                                        <div className="text-xs text-gray-400 font-medium">{m.email}</div>
+                                                    </div>
+                                                </div>
+                                                <div className="text-right">
+                                                    <div className="text-xs font-bold text-gray-500">{m.phone}</div>
+                                                    <div className="text-[10px] text-gray-300 mt-0.5">{new Date(m.created_at).toLocaleDateString()} 가입</div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="text-center py-20 bg-gray-50 rounded-2xl border border-dashed border-gray-200">
+                                        <p className="text-gray-400 text-sm">아직 가입된 멤버가 없습니다.</p>
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="mt-8 flex justify-end">
+                                <button
+                                    onClick={() => {
+                                        setIsMemberModalOpen(false);
+                                        setSelectedCompanyMembers(null);
+                                    }}
+                                    className="px-8 py-3.5 bg-gray-800 text-white rounded-2xl font-bold text-sm hover:bg-gray-900 transition-all active:scale-95 shadow-lg shadow-gray-200"
+                                >
+                                    확인
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
+export default AdminPage;
