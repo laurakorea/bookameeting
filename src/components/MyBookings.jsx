@@ -47,11 +47,13 @@ const MyBookings = ({ user }) => {
     const getStatusInfo = (status) => {
         switch (status) {
             case 'approved':
-                return { label: '승인됨', color: 'text-mint-500 bg-mint-50', icon: <CheckCircle className="w-4 h-4" /> };
+                return { label: '승인됨', color: 'text-mint-700 bg-mint-100', icon: <CheckCircle className="w-4 h-4" /> };
             case 'cancelled':
-                return { label: '취소됨', color: 'text-gray-400 bg-gray-50', icon: <XCircle className="w-4 h-4" /> };
+                return { label: '취소됨', color: 'text-gray-500 bg-gray-100', icon: <XCircle className="w-4 h-4" /> };
+            case 'rejected':
+                return { label: '거절됨', color: 'text-red-700 bg-red-100', icon: <XCircle className="w-4 h-4" /> };
             default:
-                return { label: '대기중', color: 'text-amber-500 bg-amber-50', icon: <AlertCircle className="w-4 h-4" /> };
+                return { label: '대기중', color: 'text-amber-700 bg-amber-100', icon: <AlertCircle className="w-4 h-4" /> };
         }
     };
 
@@ -83,7 +85,7 @@ const MyBookings = ({ user }) => {
                             isAfter(parseISO(booking.start_time), new Date());
 
                         return (
-                            <div key={booking.id} className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
+                            <div key={booking.id} className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
                                 <div className="flex justify-between items-start mb-4">
                                     <div className="flex items-center gap-2">
                                         <div className={`px-2.5 py-1 rounded-full text-[10px] font-bold flex items-center gap-1.5 ${statusInfo.color}`}>

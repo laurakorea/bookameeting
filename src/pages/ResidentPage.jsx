@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
+import { useNavigate } from 'react-router-dom';
 import Timeline from '../components/Timeline';
 import MyBookings from '../components/MyBookings';
-import { Loader2, Calendar, ListChecks, LogOut } from 'lucide-react';
+import { Loader2, Calendar, ListChecks, LogOut, AlertTriangle, ShieldAlert } from 'lucide-react';
 
 const ResidentPage = () => {
     const [user, setUser] = useState(null);
@@ -11,16 +12,70 @@ const ResidentPage = () => {
     const [isLoading, setIsLoading] = useState(false);
     const [view, setView] = useState('timeline'); // 'timeline' or 'my-bookings'
 
+    const navigate = useNavigate();
+
     useEffect(() => {
+        document.title = "회의실 예약";
+        const favicon = document.querySelector('link[rel="icon"]');
+        if (favicon) {
+            favicon.href = "/calendar.svg";
+        }
+
         const savedUser = localStorage.getItem('meetingroom_user');
         if (savedUser) {
             setIsLoading(true);
-            setTimeout(() => {
-                setUser(JSON.parse(savedUser));
+            const parsedUser = JSON.parse(savedUser);
+            checkCompanyStatus(parsedUser.companyId).then(isValid => {
+                if (isValid) {
+                    setUser(parsedUser);
+                    // 실시간 상태 감시 시작
+                    subscribeToCompany(parsedUser.companyId);
+                }
                 setIsLoading(false);
-            }, 800);
+            });
         }
     }, []);
+
+    const checkCompanyStatus = async (companyId) => {
+        if (!supabase) return false;
+        const { data, error } = await supabase
+            .from('companies')
+            .select('is_active, valid_until')
+            .eq('id', companyId)
+            .single();
+
+        if (error || !data) {
+            console.error('Company check error:', error);
+            return true; // 에러 시 일단 허용 (또는 엄격하게 처리 가능)
+        }
+
+        const isExpired = data.valid_until && new Date(data.valid_until) < new Date();
+        if (!data.is_active || isExpired) {
+            localStorage.removeItem('meetingroom_user');
+            navigate('/access-blocked', { state: { reason: !data.is_active ? 'inactive' : 'expired' } });
+            return false;
+        }
+        return true;
+    };
+
+    const subscribeToCompany = (companyId) => {
+        if (!supabase) return;
+        supabase
+            .channel(`company-status-${companyId}`)
+            .on('postgres_changes', {
+                event: 'UPDATE',
+                schema: 'public',
+                table: 'companies',
+                filter: `id=eq.${companyId}`
+            }, (payload) => {
+                const isExpired = payload.new.valid_until && new Date(payload.new.valid_until) < new Date();
+                if (!payload.new.is_active || isExpired) {
+                    localStorage.removeItem('meetingroom_user');
+                    navigate('/access-blocked', { state: { reason: !payload.new.is_active ? 'inactive' : 'expired' } });
+                }
+            })
+            .subscribe();
+    };
 
     const handleLogin = async (e) => {
         e.preventDefault();
@@ -36,7 +91,7 @@ const ResidentPage = () => {
 
             const { data, error } = await supabase
                 .from('profiles')
-                .select('*, companies(name)')
+                .select('*, companies(*)')
                 .eq('email', email)
                 .eq('phone', phone)
                 .single();
@@ -45,15 +100,26 @@ const ResidentPage = () => {
                 console.error('Login Error:', error);
                 alert('로그인 중 오류가 발생했습니다: ' + error.message);
             } else if (data) {
+                // 회사 상태 확인
+                const company = data.companies;
+                const isExpired = company.valid_until && new Date(company.valid_until) < new Date();
+
+                if (!company.is_active || isExpired) {
+                    navigate('/access-blocked', { state: { reason: !company.is_active ? 'inactive' : 'expired' } });
+                    setIsLoading(false);
+                    return;
+                }
+
                 const userData = {
                     companyId: data.company_id,
-                    companyName: data.companies?.name,
-                    userId: data.name, // 기존 시스템 호환을 위해 name을 userId로 사용
+                    companyName: company.name,
+                    userId: data.name,
                     name: data.name,
                     email: data.email
                 };
                 localStorage.setItem('meetingroom_user', JSON.stringify(userData));
                 setUser(userData);
+                subscribeToCompany(data.company_id);
             } else {
                 alert('등록된 사용자가 없거나 정보가 일치하지 않습니다.');
             }
@@ -115,42 +181,41 @@ const ResidentPage = () => {
 
     return (
         <div className="p-6 max-w-7xl mx-auto">
-            <header className="flex justify-between items-end mb-8">
-                <div>
-                    <h1 className="text-3xl font-bold text-gray-800">
-                        {view === 'timeline' ? '회의실 예약 현황' : '내 예약 관리'}
-                    </h1>
-                    <p className="text-gray-500 text-sm font-medium mt-1">{user.companyName} · {user.name} 님 환영합니다</p>
-                </div>
-                <div className="flex items-center gap-2">
-                    <div className="flex bg-gray-100 p-1 rounded-xl">
-                        <button
-                            onClick={() => setView('timeline')}
-                            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${view === 'timeline' ? 'bg-white text-mint-500 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
-                        >
-                            <Calendar className="w-4 h-4" />
-                            타임라인
-                        </button>
-                        <button
-                            onClick={() => setView('my-bookings')}
-                            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${view === 'my-bookings' ? 'bg-white text-mint-500 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
-                        >
-                            <ListChecks className="w-4 h-4" />
-                            내 예약
-                        </button>
-                    </div>
+            <header className="mb-4">
+                <h1 className="text-3xl font-bold text-gray-800">
+                    {view === 'timeline' ? '회의실 예약 현황' : '내 예약 관리'}
+                </h1>
+                <div className="flex justify-between items-center mt-1">
+                    <p className="text-gray-500 text-sm font-medium">{user.companyName} · {user.name} 님 환영합니다</p>
                     <button
                         onClick={() => {
                             localStorage.removeItem('meetingroom_user');
                             setUser(null);
                         }}
-                        className="ml-4 p-2.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-xl transition-all"
+                        className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-xl transition-all flex items-center gap-1.5 text-xs font-bold"
                         title="로그아웃"
                     >
-                        <LogOut className="w-5 h-5" />
+                        <LogOut className="w-4 h-4" /> 로그아웃
                     </button>
                 </div>
             </header>
+
+            <div className="flex bg-gray-100 p-1.5 rounded-xl w-fit mb-8 gap-1">
+                <button
+                    onClick={() => setView('timeline')}
+                    className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${view === 'timeline' ? 'bg-white text-mint-500 shadow-sm border border-gray-100' : 'text-gray-400 hover:text-gray-600'}`}
+                >
+                    <Calendar className="w-4 h-4" />
+                    타임라인
+                </button>
+                <button
+                    onClick={() => setView('my-bookings')}
+                    className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${view === 'my-bookings' ? 'bg-white text-mint-500 shadow-sm border border-gray-100' : 'text-gray-400 hover:text-gray-600'}`}
+                >
+                    <ListChecks className="w-4 h-4" />
+                    내 예약
+                </button>
+            </div>
 
             <main className="animate-in fade-in slide-in-from-bottom-2 duration-500">
                 {view === 'timeline' ? (

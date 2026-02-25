@@ -87,14 +87,14 @@ const Timeline = ({ user }) => {
         if (status !== 'approved') return 'bg-gray-200';
 
         const colors = [
-            'bg-mint-400',
-            'bg-blue-400',
-            'bg-purple-400',
-            'bg-rose-400',
-            'bg-amber-400',
-            'bg-indigo-400',
-            'bg-teal-400',
-            'bg-pink-400'
+            'bg-mint-500 text-white',
+            'bg-blue-500 text-white',
+            'bg-purple-500 text-white',
+            'bg-rose-500 text-white',
+            'bg-amber-500 text-white',
+            'bg-indigo-500 text-white',
+            'bg-teal-500 text-white',
+            'bg-pink-500 text-white'
         ];
 
         let hash = 0;
@@ -181,18 +181,18 @@ const Timeline = ({ user }) => {
     const nextSevenDays = Array.from({ length: 7 }, (_, i) => addDays(new Date(), i));
 
     return (
-        <div className="flex flex-col h-full bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="flex flex-col h-full bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
             {/* 날짜 선택 헤더 */}
-            <div className="flex items-center justify-between p-4 border-b border-gray-100 bg-gray-50/50">
+            <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-gray-50">
                 <div className="flex gap-2">
                     {nextSevenDays.map(date => (
                         <button
                             key={date.toISOString()}
                             onClick={() => setSelectedDate(date)}
-                            className={`px-4 py-2 rounded-xl text-sm font-medium transition-all
+                            className={`px-4 py-2 rounded-xl text-sm font-bold transition-all
                 ${isSameDay(selectedDate, date)
-                                    ? 'bg-mint-400 text-white shadow-md scale-105'
-                                    : 'bg-white text-gray-500 hover:bg-gray-100 border border-gray-100'
+                                    ? 'bg-mint-500 text-white shadow-lg scale-105'
+                                    : 'bg-white text-gray-500 hover:bg-gray-100 border border-gray-200'
                                 }
                 ${isWeekend(date) || isHoliday(date) ? 'opacity-60' : ''}
               `}
@@ -215,29 +215,29 @@ const Timeline = ({ user }) => {
             <div className="flex-1 overflow-auto">
                 <div className="min-w-[800px]">
                     {/* 회의실 이름 헤더 */}
-                    <div className="grid grid-cols-[100px_repeat(4,1fr)] sticky top-0 z-10 bg-white border-b border-gray-100 shadow-sm">
-                        <div className="p-4 bg-gray-50/50"></div>
+                    <div className="grid grid-cols-[100px_repeat(4,1fr)] sticky top-0 z-10 bg-white border-b border-gray-300 shadow-sm">
+                        <div className="p-4 bg-gray-50"></div>
                         {rooms.map(room => (
-                            <div key={room} className="p-4 text-center font-bold text-gray-700 text-sm border-l border-gray-50">
+                            <div key={room} className="p-4 text-center font-bold text-gray-800 text-sm border-l border-gray-300">
                                 {room}
                             </div>
                         ))}
                     </div>
 
                     {/* 수직 타임라인 그리드 */}
-                    <div className="divide-y divide-gray-50">
+                    <div className="divide-y divide-gray-300">
                         {hours.map(hour => (
                             <div key={hour} className="grid grid-cols-[100px_repeat(4,1fr)] group">
-                                <div className="p-4 text-center text-xs font-semibold text-gray-400 flex flex-col justify-center bg-gray-50/30 group-hover:bg-gray-50 transition-colors">
-                                    <span className="text-gray-600 text-sm">{hour.toString().padStart(2, '0')}:00</span>
-                                    <span className="text-[10px] opacity-60">{(hour + 1).toString().padStart(2, '0')}:00</span>
+                                <div className="p-4 text-center text-xs font-bold text-gray-500 flex flex-col justify-center bg-gray-50 group-hover:bg-gray-100 transition-colors border-r border-gray-300">
+                                    <span className="text-gray-800 text-sm">{hour.toString().padStart(2, '0')}:00</span>
+                                    <span className="text-[10px] opacity-70">{(hour + 1).toString().padStart(2, '0')}:00</span>
                                 </div>
                                 {rooms.map(room => {
                                     const booking = getBookingAt(room, hour);
                                     const restricted = isRestrictedTime(selectedDate, hour);
                                     const isApproved = booking?.status === 'approved';
 
-                                    //连续预约 병합 로직
+                                    //연속 예약 병합 로직
                                     const prevBooking = hour > 9 ? getBookingAt(room, hour - 1) : null;
                                     const nextBooking = hour < 18 ? getBookingAt(room, hour + 1) : null;
 
@@ -251,7 +251,7 @@ const Timeline = ({ user }) => {
                                     return (
                                         <div
                                             key={`${room}-${hour}`}
-                                            className={`border-l border-gray-50 min-h-[64px] flex flex-col px-1
+                                            className={`border-l border-gray-300 min-h-[72px] flex flex-col px-1.5
                                                 ${isSameAsPrev ? 'pt-0' : 'pt-1'}
                                                 ${isSameAsNext ? 'pb-0' : 'pb-1'}
                                             `}
@@ -263,10 +263,10 @@ const Timeline = ({ user }) => {
                                                 className={`w-full h-full transition-all flex items-center justify-center relative overflow-hidden group/slot select-none
                           ${isSameAsPrev ? 'rounded-t-none' : 'rounded-t-lg'}
                           ${isSameAsNext ? 'rounded-b-none' : 'rounded-b-lg'}
-                          ${booking
-                                                        ? getCompanyColor(booking.company_id, booking.status) + ' text-white shadow-sm'
+                           ${booking
+                                                        ? getCompanyColor(booking.company_id, booking.status) + ' shadow-md scale-[0.98]'
                                                         : restricted
-                                                            ? 'bg-gray-50/50 cursor-not-allowed border-dashed border border-gray-100 opacity-40'
+                                                            ? 'bg-gray-100 cursor-not-allowed border-dashed border border-gray-200 opacity-50'
                                                             : dragState && dragState.room === room &&
                                                                 hour >= Math.min(dragState.startHour, dragState.currentHour) &&
                                                                 hour <= Math.max(dragState.startHour, dragState.currentHour)

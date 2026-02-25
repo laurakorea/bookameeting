@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import ResidentPage from './pages/ResidentPage';
 import AdminPage from './pages/AdminPage';
 import RegisterPage from './pages/RegisterPage';
+import AccessBlocked from './pages/AccessBlocked';
 import './index.css';
 
 function App() {
@@ -13,6 +14,7 @@ function App() {
           <Route path="/" element={<ResidentPage />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/admin" element={<AdminPage />} />
+          <Route path="/access-blocked" element={<AccessBlocked />} />
         </Routes>
       </div>
     </Router>
