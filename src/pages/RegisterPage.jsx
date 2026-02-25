@@ -30,14 +30,20 @@ const RegisterPage = () => {
         if (supabase) {
             const { data, error } = await supabase
                 .from('companies')
-                .select('name')
+                .select('name, is_active, valid_until')
                 .eq('id', formData.companyId.toUpperCase())
                 .single();
 
             if (data) {
-                setCompanyName(data.name);
-                setCompanyError('');
-                setStep(2); // 검증 성공 시 2단계로 이동
+                const isExpired = data.valid_until && new Date(data.valid_until) < new Date();
+                if (!data.is_active || isExpired) {
+                    setCompanyName('');
+                    setCompanyError('만료된 회사코드입니다. 관리자에게 문의하세요.');
+                } else {
+                    setCompanyName(data.name);
+                    setCompanyError('');
+                    setStep(2);
+                }
             } else {
                 setCompanyName('');
                 setCompanyError('유효하지 않은 회사 ID입니다. (8자리 난수 코드를 입력하세요)');
